@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>現代文 F.O.R. トレーナー</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --bg: #f3f4f6;
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        h1 { font-size: 1.2rem; text-align: center; color: #1f2937; margin-top: 0; }
+        .mode-select { display: flex; gap: 10px; margin-bottom: 20px; }
+        button {
+            padding: 10px 16px; border: none; border-radius: 8px;
+            font-weight: bold; cursor: pointer; font-size: 0.9rem; transition: 0.2s;
+        }
+        .btn-mode { background: #e5e7eb; color: #374151; width: 100%; }
+        .btn-mode.active { background: var(--primary); color: white; }
+        
+        .card {
+            border: 2px solid #e5e7eb; border-radius: 12px;
+            padding: 30px 20px; min-height: 150px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; margin-bottom: 20px; position: relative;
+        }
+        .card-meta { position: absolute; top: 10px; left: 10px; font-size: 0.8rem; color: #9ca3af; }
+        .question { font-size: 1.15rem; font-weight: bold; color: #111827; line-height: 1.5; }
+        .answer { font-size: 1.1rem; color: var(--primary); font-weight: bold; margin-top: 20px; display: none; line-height: 1.5; }
+        
+        .action-area { display: flex; flex-direction: column; gap: 10px; }
+        .btn-main { background: var(--primary); color: white; padding: 14px; font-size: 1rem; width: 100%; }
+        .judge-buttons { display: none; gap: 10px; width: 100%; }
+        .btn-wrong { background: var(--danger); color: white; width: 100%; padding: 14px; }
+        .btn-correct { background: var(--success); color: white; width: 100%; padding: 14px; }
+        
+        .progress { text-align: center; font-size: 0.85rem; color: #6b7280; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>現代文 F.O.R. トレーナー</h1>
+    
+    <div class="mode-select">
+        <button class="btn-mode active" id="mode-all" onclick="changeMode('all')">全問出題</button>
+        <button class="btn-mode" id="mode-wrong" onclick="changeMode('wrong')">✕のみ復習 (<span id="wrong-count">0</span>)</button>
+    </div>
+
+    <div class="card">
+        <div class="card-meta" id="card-meta">カテゴリ</div>
+        <div class="question" id="question-text">質問がここに表示されます</div>
+        <div class="answer" id="answer-text">回答がここに表示されます</div>
+    </div>
+
+    <div class="action-area">
+        <button class="btn-main" id="btn-show" onclick="showAnswer()">答えを見る</button>
+        <div class="judge-buttons" id="judge-block">
+            <button class="btn-wrong" onclick="handleJudge(false)">✕ あやしい</button>
+            <button class="btn-correct" onclick="handleJudge(true)">◯ 覚えた</button>
+        </div>
+    </div>
+
+    <div class="progress" id="progress-text">0 / 0問</div>
+</div>
+
+<script>
+// 今回作成した「対比テーマ④〜⑥」のデータを格納しています
+const allQuestions = [
+    { id: 96, cat: "【デジタルvsリアル】", q: "本文中に「デジタル」「ネット」「バーチャル」「SNS」を見たら？", a: "「対比ボックス（A：デジタル）」を開く。" },
+    { id: 97, cat: "【デジタルvsリアル】", q: "この「デジタル（A）」の性質（キーワード）は？", a: "効率的、視覚と聴覚だけ、思い通りになる、疲れる。" },
+    { id: 98, cat: "【デジタルvsリアル】", q: "脳内は、対立するどんな言葉（B）の登場を予測する？", a: "「リアル」「現実」「身体（からだ）」「五感」「手仕事」。" },
+    { id: 99, cat: "【デジタルvsリアル】", q: "この「リアル（B）」の性質（キーワード）は？", a: "面倒くさい（非効率）、触覚（触る）や匂いがある、思い通りにならない。" },
+    { id: 100, cat: "【デジタルvsリアル】", q: "筆者は最終的に、どちらに「本当の価値」があると言う？", a: "「リアル（B）」の価値。便利だからとデジタル（A）ばかりに頼ると、人間の心や体が鈍くなってしまうと批判する。" },
+    { id: 101, cat: "【記号vs現実】", q: "本文中に「記号」「言葉」「名前」「データ」を見たら？", a: "「対比ボックス（A：記号）」を開く。" },
+    { id: 102, cat: "【記号vs現実】", q: "この「記号（A）」の性質は？", a: "世界を分かりやすく整理・分類したもの。枠組み。" },
+    { id: 103, cat: "【記号vs現実】", q: "脳内は、対立するどんな言葉（B）の登場を予測する？", a: "「生の現実」「具体」「個々のもの」「言葉にできないもの」。" },
+    { id: 104, cat: "【記号vs現実】", q: "この「生の現実（B）」の性質は？", a: "言葉の枠組みからはみ出す、1つ1つ違った複雑なもの。" },
+    { id: 105, cat: "【記号vs現実】", q: "入試問題の選択肢で「言葉やデータ（A）ですべてを解決できる」という選択肢があったら？", a: "バツ（消去）。筆者は常に「言葉（A）で割り切れない現実（B）に目を向けよ」と主張する。" },
+    { id: 106, cat: "【自律vs他者】", q: "本文中に「自己」「自分」「自律」「コントロール」を見たら？", a: "「対比ボックス（A：自分）」を開く。" },
+    { id: 107, cat: "【自律vs他者】", q: "この「自己（A）」の文脈の性質は？", a: "自分の思い通りにしたい、傷つきたくない（殻にこもる）。" },
+    { id: 108, cat: "【自律vs他者】", q: "脳内は、対立するどんな言葉（B）の登場を予測する？", a: "「他者（他人）」「コミュニケーション」「共同体」。" },
+    { id: 109, cat: "【自律vs他者】", q: "現代文における「他者（B）」の絶対的な定義は何か？", a: "「自分の思い通りにならない存在」。" },
+    { id: 110, cat: "【自律vs他者】", q: "筆者が提示する「これからのコミュニケーションのあり方」は？", a: "自分の殻（A）にこもるのではなく、思い通りにならない他者（B）と傷つきながらも関わり合っていくべきだ、という結論になる。" },
+    { id: 111, cat: "【記述アルゴリズム】", q: "記述問題で「デジタル（A）の欠点」を聞かれたら、どこから言葉を拾う？", a: "「リアル（B）の長所」が書いてある部分を探し、その表現を「〜が失われること」のようにひっくり返して答案を作る。" }
+];
+
+let currentQuestions = [];
+let currentIndex = 0;
+let currentMode = 'all'; 
+
+// ブラウザのローカルストレージから×のリストを取得
+let wrongList = JSON.parse(localStorage.getItem('for_wrong_list')) || [];
+
+function updateWrongCountDisplay() {
+    document.getElementById('wrong-count').innerText = wrongList.length;
+}
+
+function initGame() {
+    updateWrongCountDisplay();
+    if (currentMode === 'all') {
+        // 全問をランダムシャッフル
+        currentQuestions = [...allQuestions].sort(() => Math.random() - 0.5);
+    } else {
+        // ✕のIDに一致する問題だけをフィルターしてシャッフル
+        currentQuestions = allQuestions.filter(q => wrongList.includes(q.id)).sort(() => Math.random() - 0.5);
+    }
+    
+    currentIndex = 0;
+    if (currentQuestions.length === 0) {
+        document.getElementById('question-text').innerText = "✕がついた問題はありません。完璧です！";
+        document.getElementById('answer-text').style.display = "none";
+        document.getElementById('btn-show').style.display = "none";
+        document.getElementById('judge-block').style.display = "none";
+        document.getElementById('progress-text').innerText = "0 / 0問";
+    } else {
+        showQuestion();
+    }
+}
+
+function showQuestion() {
+    const q = currentQuestions[currentIndex];
+    document.getElementById('card-meta').innerText = q.cat;
+    document.getElementById('question-text').innerText = q.q;
+    document.getElementById('answer-text').innerText = q.a;
+    
+    document.getElementById('answer-text').style.display = "none";
+    document.getElementById('btn-show').style.display = "block";
+    document.getElementById('judge-block').style.display = "none";
+    document.getElementById('progress-text').innerText = `${currentIndex + 1} / ${currentQuestions.length}問`;
+}
+
+function showAnswer() {
+    document.getElementById('answer-text').style.display = "block";
+    document.getElementById('btn-show').style.display = "none";
+    document.getElementById('judge-block').style.display = "flex";
+}
+
+function handleJudge(isCorrect) {
+    const currentId = currentQuestions[currentIndex].id;
+    
+    if (isCorrect) {
+        // ◯なら✕リストから削除
+        wrongList = wrongList.filter(id => id !== currentId);
+    } else {
+        // ✕ならリストに追加（すでにあれば重複させない）
+        if (!wrongList.includes(currentId)) {
+            wrongList.push(currentId);
+        }
+    }
+    
+    // ブラウザに保存
+    localStorage.setItem('for_wrong_list', JSON.stringify(wrongList));
+    updateWrongCountDisplay();
+    
+    currentIndex++;
+    if (currentIndex < currentQuestions.length) {
+        showQuestion();
+    } else {
+        alert("すべての問題を終了しました！");
+        initGame();
+    }
+}
+
+function changeMode(mode) {
+    currentMode = mode;
+    document.getElementById('mode-all').classList.toggle('active', mode === 'all');
+    document.getElementById('mode-wrong').classList.toggle('active', mode === 'wrong');
+    initGame();
+}
+
+// アプリ起動
+initGame();
+</script>
+
+</body>
+</html>
